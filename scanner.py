@@ -1280,31 +1280,31 @@ class Scanner:
         self.phoming = self.printer.lookup_object("homing")
         axis_twist_comp = self.printer.lookup_object("axis_twist_compensation", None)
         if axis_twist_comp is not None:
+            # Adapt each Klipper axis-twist API to a pos -> z-offset callable.
             if hasattr(axis_twist_comp, "get_z_compensation_value"):
                 self.mod_axis_twist_comp = axis_twist_comp.get_z_compensation_value
             else:
+                self.raw_axis_twist_comp = axis_twist_comp
+                if hasattr(manual_probe, "ProbeResult"):
+                    def get_z_compensation_value(pos):
+                        (x, y, z) = self.get_offsets()
+                        temp = [manual_probe.ProbeResult(
+                            pos[0] + x,
+                            pos[1] + y,
+                            pos[2] - z,
+                            pos[0],
+                            pos[1],
+                            pos[2],
+                        )]
+                        bed_z = temp[0].bed_z
+                        self.raw_axis_twist_comp._update_z_compensation_value(temp)
+                        return temp[0].bed_z - bed_z
+                else:
+                    def get_z_compensation_value(pos):
+                        temp = list(pos)
+                        self.raw_axis_twist_comp._update_z_compensation_value(temp)
+                        return temp[2] - pos[2]
 
-                self.raw_axis_twist_comp = self.mod_axis_twist_comp
-                def get_z_compensation_value(pos):
-                    temp = list(pos)
-                    self.raw_axis_twist_comp._update_z_compensation_value(temp)
-                    return temp[2] - pos[2]
-
-                self.mod_axis_twist_comp = get_z_compensation_value
-            if hasattr(manual_probe, "ProbeResult"):
-                def get_z_compensation_value(self, pos):
-                    (x, y, z) = self.get_offsets()
-                    temp = [manual_probe.ProbeResult(
-                        pos[0] + x,
-                        pos[1] + y,
-                        pos[2] - z,
-                        pos[0],
-                        pos[1],
-                        pos[2],
-                    )]
-                    bed_z = temp[0].bed_z
-                    self.raw_axis_twist_comp._update_z_compensation_value(temp)
-                    return temp[0].bed_z - bed_z
                 self.mod_axis_twist_comp = get_z_compensation_value
         # Ensure streaming mode is stopped
         self.scanner_stream_cmd.send([0])
